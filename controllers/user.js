@@ -186,13 +186,55 @@ const updateUserByadmin = asyncHandler(async (req, res) => {
     if(Object.keys(req.body).length === 0){
         throw new Error('Missing parameter')
     }
-    const response = await User.findByIdAndUpdate(uid, req.body, {new: true}).select('-password -role')
+    const response = await User.findByIdAndUpdate(uid, req.body, {new: true}).select('-password -role -refreshToken')
     return res.status(200).json({
         success: response ? true : false,
         updatedUser: response ? response : 'Somthing went wrong!'
     })
 })
  
+const updateUserAddress = asyncHandler(async (req, res) => { 
+    const {_id} = req.user;
+    if(!req.body.address){
+        throw new Error('Missing parameter')
+    }
+    const response = await User.findByIdAndUpdate(_id,{$push: {address: req.body.address}}, {new: true}).select('-password -role -refreshToken')
+    return res.status(200).json({
+        success: response ? true : false,
+        updatedAddress: response ? response : 'Somthing went wrong!'
+    })
+})
+
+const updateCart = asyncHandler(async (req, res) => { 
+    const {_id} = req.user;
+    const {pid, quantity, color} = req.body;
+    if(!pid || !quantity || !color){
+        throw new Error('Missing parameter')
+    }
+    const user = await User.findById(_id).select('cart');
+    const alreadyProduct = user?.cart?.find(el => el.product.toString() === pid);
+    if(alreadyProduct){
+        if(alreadyProduct.color === color){
+            const response = await User.updateOne({cart: {$elemMatch: alreadyProduct}}, {$set: {"cart.$.quantity": quantity}}, {new: true});
+            return res.status(200).json({
+                success: response ? true : false,
+                updatedCart: response ? response : 'Somthing went wrong!'
+            })
+        }else{
+            const response = await User.findByIdAndUpdate(_id, {$push: {cart: {product: pid, quantity, color}}}, {new: true});
+            return res.status(200).json({
+                success: response ? true : false,
+                updatedCart: response ? response : 'Somthing went wrong!'
+            })
+        }
+    }else{
+        const response = await User.findByIdAndUpdate(_id, {$push: {cart: {product: pid, quantity, color}}}, {new: true});
+        return res.status(200).json({
+            success: response ? true : false,
+            updatedCart: response ? response : 'Somthing went wrong!'
+        })
+    }
+})
 
 module.exports = {
     register, 
@@ -205,5 +247,7 @@ module.exports = {
     getUsers,
     deleteUsers,
     updateUsers,
-    updateUserByadmin
+    updateUserByadmin,
+    updateUserAddress,
+    updateCart
 }

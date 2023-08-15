@@ -24,9 +24,10 @@ var blogSchema = new mongoose.Schema({
     dislikes: [
         {type: mongoose.Types.ObjectId, ref: 'User',}
     ],
-    image: [
-        {type: String, default: 'https://c.wallhere.com/photos/7e/e0/architecture_fans-50775.jpg!d',}
-    ],
+    image: {
+        type: String, 
+        default: 'https://c.wallhere.com/photos/7e/e0/architecture_fans-50775.jpg!d',
+    },
     author: [
         {type: String, default: 'Admin',}
     ],

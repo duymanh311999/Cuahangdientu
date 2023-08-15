@@ -12,7 +12,10 @@ router.put('/resetpassword', controllers.resetPassword);
 router.get('/',[verifyAccessToken, isAdmin], controllers.getUsers);
 router.delete('/',[verifyAccessToken, isAdmin], controllers.deleteUsers);
 router.put('/current',[verifyAccessToken], controllers.updateUsers);
+router.put('/address',verifyAccessToken, controllers.updateUserAddress);
+router.put('/cart',verifyAccessToken, controllers.updateCart);
 router.put('/:uid',[verifyAccessToken, isAdmin], controllers.updateUserByadmin);
+
 
 module.exports = router
 
