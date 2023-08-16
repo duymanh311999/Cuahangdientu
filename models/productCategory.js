@@ -18,4 +18,4 @@ var productCategorySchema = new mongoose.Schema({
 });
 
 //Export the model
-module.exports = mongoose.model('ProductCategory', productCategorySchema);
+module.exports = mongoose.model('productcategories', productCategorySchema);

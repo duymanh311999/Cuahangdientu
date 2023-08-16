@@ -47,7 +47,7 @@ const login = asyncHandler(async (req, res) => {
         // Lưu refresh token vào cookie
         res.cookie('refreshToken', newRefreshToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 })
         return res.status(200).json({
-            sucess: true,
+            success: true,
             accessToken,
             userData
         })

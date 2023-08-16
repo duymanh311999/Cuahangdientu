@@ -20,3 +20,4 @@ router.put('/:uid',[verifyAccessToken, isAdmin], controllers.updateUserByadmin);
 module.exports = router
 
 
+  
