@@ -19,8 +19,8 @@ var userSchema = new mongoose.Schema({
     },
     mobile: {
         type: String,
-        required: true,
         unique: true,
+        required: true,
     },
     password: {
         type: String,
@@ -52,7 +52,10 @@ var userSchema = new mongoose.Schema({
     },
     passwordResetExpires: {
         type: String
-    }
+    },
+    registerToken: {
+        type: String
+    },
 }, {
     timestamps: true
 });

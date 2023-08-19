@@ -1,28 +1,55 @@
 const asyncHandler = require('express-async-handler');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const makeToken = require('uniqid'); 
 
 const User = require('../models/user');
 const sendMail = require('../ultils/sendMail');
 const { generateAccessToken, generateRefreshToken } = require('../middlewares/jwt');
 
+
 const register = asyncHandler(async (req, res) => {
-    const { email, password, firstname, lastname } = req.body
-    if (!email || !password || !lastname || !firstname){
+    const { email, password, firstname, lastname, mobile } = req.body
+    if (!email || !password || !lastname || !firstname || !mobile){
         return res.status(400).json({
             success: false,
-            message: 'Missing parameter'
+            message: 'Vui lòng điền đầy đủ thông tin'
         })}
+        const user = await User.findOne({email})
+            if(user) {
+                throw new Error('Người dùng đã tồn tại!')
+            } else {
+                const token = makeToken()
+                res.cookie('dataregister', {...req.body, token}, {httpOnly: true, maxAge: 15 * 60* 1000} )
+                const html = `Xin vui lòng nhấn vào link dưới đây để hoàn tất quá trình đăng ký. Link này sẽ hết hạn sau 15 phút. 
+                <a href= ${process.env.URL_SERVER}/api/user/finalregister/${token}>Click here</a>`
+                await sendMail({email, html, subject: 'Hoàn tất đăng ký Digital World 2'})
+                return res.json({
+                    success: true,
+                    message: 'Vui lòng kiểm tra Email để kích hoạt tài khoản'
+                })
+            }
+})
 
-    const user = await User.findOne({email})
-    if(user) {
-        throw new Error('User has existed!')
-    } else {
-        const newUser = await User.create(req.body)
-        return res.status(200).json({
-            success: newUser ? true : false,
-            message: newUser ? 'Register is successfully, please login to continue' : 'Something went wrong'
-         })
+const finalRegister = asyncHandler(async (req, res) => { 
+    const cookie  = req.cookies;
+    const {token} = req.params;
+    if(!cookie || cookie?.dataregister?.token !== token){
+        res.clearCookie('dataregister')
+        return res.redirect(`${process.env.CLIENT_URL}/finalregister/failed`)
+    }
+    const newUser = await User.create({
+        email: cookie?.dataregister?.email,
+        password: cookie?.dataregister?.password,
+        mobile: cookie?.dataregister?.mobile,
+        firstname: cookie?.dataregister?.firstname,
+        lastname: cookie?.dataregister?.lastname,
+    })
+    res.clearCookie('dataregister')
+    if(newUser){
+        return res.redirect(`${process.env.CLIENT_URL}/finalregister/success`)
+    }else{
+        return res.redirect(`${process.env.CLIENT_URL}/finalregister/failed`)
     }
 })
 
@@ -102,7 +129,7 @@ const logout = asyncHandler(async (req, res) => {
 })
 
 const forgotPassword = asyncHandler(async (req, res) => {
-    const {email} = req.query
+    const {email} = req.body  
     if (!email){
         throw new Error('Missing email')
     }
@@ -113,17 +140,18 @@ const forgotPassword = asyncHandler(async (req, res) => {
     const resetToken = user.createPasswordChangedToken()
     await user.save()
 
-    const html = `xin vui lòng nhấn vào link dưới đây để thay đổi mật khẩu của bạn. Link này sẽ hết hạn sau 15 phút. 
-    <a href= ${process.env.URL_SERVER}/api/user/reset-password/${resetToken}>Click</a>`
+    const html = `Xin vui lòng nhấn vào link dưới đây để thay đổi mật khẩu của bạn. Link này sẽ hết hạn sau 15 phút. 
+    <a href= ${process.env.CLIENT_URL}/reset-password/${resetToken}>Click here</a>`
 
     const data = {
         email, 
-        html
+        html,
+        subject: 'Quên mật khẩu'
     }
     const rs = await sendMail(data)
     return res.status(200).json({
-        success: true,
-        rs
+        success: rs.response?.includes('OK') ? true : false,
+        message: rs.response?.includes('OK') ? 'Vui lòng kiểm tra Mail của bạn' : 'Có lỗi xảy ra, vui lòng thử lại sau'
     })
  })
 
@@ -249,5 +277,6 @@ module.exports = {
     updateUsers,
     updateUserByadmin,
     updateUserAddress,
-    updateCart
+    updateCart,
+    finalRegister
 }
