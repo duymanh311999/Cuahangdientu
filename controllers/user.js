@@ -6,6 +6,7 @@ const makeToken = require('uniqid');
 const User = require('../models/user');
 const sendMail = require('../ultils/sendMail');
 const { generateAccessToken, generateRefreshToken } = require('../middlewares/jwt');
+const { btoa, atob } = require('buffer');
 
 
 const register = asyncHandler(async (req, res) => {
@@ -20,37 +21,36 @@ const register = asyncHandler(async (req, res) => {
                 throw new Error('Người dùng đã tồn tại!')
             } else {
                 const token = makeToken()
-                res.cookie('dataregister', {...req.body, token}, {httpOnly: true, maxAge: 15 * 60* 1000} )
-                const html = `Xin vui lòng nhấn vào link dưới đây để hoàn tất quá trình đăng ký. Link này sẽ hết hạn sau 15 phút. 
-                <a href= ${process.env.URL_SERVER}/api/user/finalregister/${token}>Click here</a>`
-                await sendMail({email, html, subject: 'Hoàn tất đăng ký Digital World 2'})
+                const emailEdited = btoa(email) + '@' + token
+                const newUser = await User.create({
+                    email: emailEdited, password, firstname, lastname, mobile
+                })
+                if(newUser){
+                    const html = `<h2>Mã đăng ký:</h2><br/><blockquote>${token}</blockquote>`
+                    await sendMail({email, html, subject: 'Hoàn tất đăng ký Digital World 2'})
+                }
+                setTimeout(async() => {
+                    await User.deleteOne({email: emailEdited})
+                },[300000])
                 return res.json({
-                    success: true,
-                    message: 'Vui lòng kiểm tra Email để kích hoạt tài khoản'
+                    success: newUser ? true : false,
+                    message: newUser ? 'Vui lòng kiểm tra Email để kích hoạt tài khoản' : 'Có lỗi xảy ra, vui lòng thử lại sau'
                 })
             }
 })
 
 const finalRegister = asyncHandler(async (req, res) => { 
-    const cookie  = req.cookies;
+    // const cookie  = req.cookies;  
     const {token} = req.params;
-    if(!cookie || cookie?.dataregister?.token !== token){
-        res.clearCookie('dataregister')
-        return res.redirect(`${process.env.CLIENT_URL}/finalregister/failed`)
+    const notActivedEmail = await User.findOne({email: new RegExp(`${token}$`)})
+    if(notActivedEmail){
+        notActivedEmail.email = atob(notActivedEmail?.email?.split('@')[0])
+        notActivedEmail.save()
     }
-    const newUser = await User.create({
-        email: cookie?.dataregister?.email,
-        password: cookie?.dataregister?.password,
-        mobile: cookie?.dataregister?.mobile,
-        firstname: cookie?.dataregister?.firstname,
-        lastname: cookie?.dataregister?.lastname,
+    return res.json({
+        success: notActivedEmail ? true : false,
+        message: notActivedEmail ? 'Đăng ký thành công, vui lòng đăng nhập để tiếp tục' : 'Có lỗi xảy ra, vui lòng thử lại sau',
     })
-    res.clearCookie('dataregister')
-    if(newUser){
-        return res.redirect(`${process.env.CLIENT_URL}/finalregister/success`)
-    }else{
-        return res.redirect(`${process.env.CLIENT_URL}/finalregister/failed`)
-    }
 })
 
 const login = asyncHandler(async (req, res) => {
