@@ -3,11 +3,18 @@ const asyncHandler = require('express-async-handler');
 const slugify = require('slugify')
 
 const createProduct = asyncHandler(async (req, res) => { 
-    if(Object.keys(req.body).length === 0){
+    const {title, description, brand, price, category, color} = req.body
+    const thumb = req?.files?.thumb[0]?.path
+    const images = req.files?.images?.map(el => el.path)
+    if(!(title && description && brand && price && category && color )){
         throw new Error('Missing parameter')
     }
-    if(req.body && req.body.title){
-        req.body.slug = slugify(req.body.title) 
+    req.body.slug = slugify(title) 
+    if(thumb){
+        req.body.thumb = thumb
+    }
+    if(images){
+        req.body.images = images
     }
     const newProduct = await Product.create(req.body);
     return res.status(200).json({
@@ -16,7 +23,7 @@ const createProduct = asyncHandler(async (req, res) => {
     })
 })
 
-const getProduct = asyncHandler(async (req, res) => { 
+const getProduct = asyncHandler(async (req, res) => {   
    const {pid} = req.params;
    const product = await Product.findById(pid).populate({
     path: 'ratings',
@@ -83,7 +90,6 @@ const getProducts = asyncHandler(async (req, res) => {
     const skip = (page -1) * limit;
     queryCommand.skip(skip).limit(limit)
 
-
     queryCommand.exec(async(err, response) => {
         if(err){
             throw new Error(err.message)
@@ -127,7 +133,6 @@ const ratings = asyncHandler(async (req, res) => {
     }
     const ratingProduct = await Product.findById(pid);
     const alreadyRating = ratingProduct?.ratings?.find(el => el.postedBy.toString() === _id);
-         console.log(alreadyRating);
     if(alreadyRating){
         await Product.updateOne({
             ratings: {$elemMatch: alreadyRating}

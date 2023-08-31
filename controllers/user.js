@@ -85,7 +85,7 @@ const login = asyncHandler(async (req, res) => {
 
 const getCurrent = asyncHandler(async (req, res) => {
     const { _id} = req.user
-    const user = await User.findById(_id).select('-refreshToken -password -role')
+    const user = await User.findById(_id).select('-refreshToken -password')
     return res.status(200).json({
         success: user ? true : false,
         rs: user ? user : 'user not found'
@@ -178,22 +178,72 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
 
 const getUsers = asyncHandler(async (req, res) => { 
-    const response = await User.find().select('-refreshToken -password -role')
-    return res.status(200).json({
-        success: response ? true : false,
-        users: response
+    const queries = {...req.query};
+    // Tách các trường đặc biệt ra khỏi query
+    const excludeFields = ['limit', 'sort', 'page', 'fields']
+    excludeFields.forEach(el => delete queries[el])
+
+    // Format lại các operators cho đúng cứ pháp mongoose
+    let queryString = JSON.stringify(queries);
+    queryString = queryString.replace(/\b(gte|gt|lt|lte)\b/g, matchdEl => `$${matchdEl}` )
+    const formatedQueries = JSON.parse(queryString);
+    //Filtering
+    if(queries?.name){
+        formatedQueries.name = {
+            $regex: queries.name,
+            $options: 'i'
+        }
+    }
+
+    if (req.query.q) {
+       delete formatedQueries.q
+       formatedQueries['$or'] = [
+        // $options: 'i' để ko phân biệt viết hoa hay viết thường
+        {firstname: { $regex: req.query.q, $options: 'i'}},
+        {lastname: { $regex: req.query.q, $options: 'i'}},
+        {email: { $regex: req.query.q, $options: 'i'}},
+       ]
+    }
+
+    let queryCommand = User.find(formatedQueries)
+
+    // Sorting  
+    if (req.query.sort) {
+        const sortBy = req.query.sort.split(',').join(' ');
+        queryCommand = queryCommand.sort(sortBy)
+    }
+
+    // Fields limiting
+    if (req.query.fields) {
+        const fields = req.query.fields.split(',').join(' ');
+        queryCommand = queryCommand.select(fields)
+    }
+
+    // Pagination 
+    const page = +req.query.page || 1;
+    const limit = +req.query.limit || process.env.LIMIT_PRODUCTS;
+    const skip = (page -1) * limit;
+    queryCommand.skip(skip).limit(limit)
+
+    queryCommand.exec(async(err, response) => {
+        if(err){
+            throw new Error(err.message)
+        }
+        const counts = await User.find(formatedQueries).countDocuments();
+        return res.status(200).json({
+            success: response ? true : false,
+            users: response ? response : 'Can not get products',
+            counts
+        })
     })
 })
 
 const deleteUsers = asyncHandler(async (req, res) => { 
-    const {_id} = req.query;
-    if(!_id){
-        throw new Error('Missing parameter')
-    }
-    const response = await User.findByIdAndDelete(_id)
+    const {uid} = req.params;
+    const response = await User.findByIdAndDelete(uid)
     return res.status(200).json({
         success: response ? true : false,
-        deletedUser: response ? `User with enail ${response.email} has been deleted` : 'No user delete'
+        message: response ? `Người dùng ${response.email} đã bị xóa` : 'Có lỗi xảy ra'
     })
 })
 
@@ -205,7 +255,7 @@ const updateUsers = asyncHandler(async (req, res) => {
     const response = await User.findByIdAndUpdate(_id, req.body, {new: true}).select('-password -role')
     return res.status(200).json({
         success: response ? true : false,
-        updatedUser: response ? response : 'Somthing went wrong!'
+        message: response ? 'Cập nhật thành công' : 'Có lỗi xảy ra'
     })
 })
 
@@ -217,7 +267,7 @@ const updateUserByadmin = asyncHandler(async (req, res) => {
     const response = await User.findByIdAndUpdate(uid, req.body, {new: true}).select('-password -role -refreshToken')
     return res.status(200).json({
         success: response ? true : false,
-        updatedUser: response ? response : 'Somthing went wrong!'
+        message: response ? 'Cập nhật thành công' : 'Có lỗi xảy ra'
     })
 })
  
