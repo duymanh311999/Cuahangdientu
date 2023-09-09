@@ -7,6 +7,7 @@ const User = require('../models/user');
 const sendMail = require('../ultils/sendMail');
 const { generateAccessToken, generateRefreshToken } = require('../middlewares/jwt');
 const { btoa, atob } = require('buffer');
+const { response } = require('express');
 
 
 const register = asyncHandler(async (req, res) => {
@@ -85,7 +86,13 @@ const login = asyncHandler(async (req, res) => {
 
 const getCurrent = asyncHandler(async (req, res) => {
     const { _id} = req.user
-    const user = await User.findById(_id).select('-refreshToken -password')
+    const user = await User.findById(_id).select('-refreshToken -password').populate({
+        path: 'cart',
+        populate: {
+            path: 'product',
+            select: 'title thumb price'
+        }   
+    })
     return res.status(200).json({
         success: user ? true : false,
         rs: user ? user : 'user not found'
@@ -249,10 +256,13 @@ const deleteUsers = asyncHandler(async (req, res) => {
 
 const updateUsers = asyncHandler(async (req, res) => { 
     const {_id} = req.user;
+    const {firstname, lastname, email, mobile} = req.body;
+    const data = {firstname, lastname, email, mobile}
+    if(req.file) data.avatar = req.file.path; 
     if(!_id || Object.keys(req.body).length === 0){
         throw new Error('Missing parameter')
     }
-    const response = await User.findByIdAndUpdate(_id, req.body, {new: true}).select('-password -role')
+    const response = await User.findByIdAndUpdate(_id, data, {new: true}).select('-password -role')
     return res.status(200).json({
         success: response ? true : false,
         message: response ? 'Cập nhật thành công' : 'Có lỗi xảy ra'
@@ -285,33 +295,46 @@ const updateUserAddress = asyncHandler(async (req, res) => {
 
 const updateCart = asyncHandler(async (req, res) => { 
     const {_id} = req.user;
-    const {pid, quantity, color} = req.body;
-    if(!pid || !quantity || !color){
+    const {pid, quantity = 1, color, price, thumbnail, title} = req.body;
+    if(!pid || !color){
         throw new Error('Missing parameter')
     }
     const user = await User.findById(_id).select('cart');
     const alreadyProduct = user?.cart?.find(el => el.product.toString() === pid);
-    if(alreadyProduct){
-        if(alreadyProduct.color === color){
-            const response = await User.updateOne({cart: {$elemMatch: alreadyProduct}}, {$set: {"cart.$.quantity": quantity}}, {new: true});
+    if(alreadyProduct && alreadyProduct.color === color){
+            const response = await User.updateOne({cart: {$elemMatch: alreadyProduct}}, {$set: {
+                "cart.$.quantity": quantity, 
+                "cart.$.price": price, 
+                "cart.$.thumbnail": thumbnail,
+                "cart.$.title": title,
+            }}, {new: true});
             return res.status(200).json({
                 success: response ? true : false,
-                updatedCart: response ? response : 'Somthing went wrong!'
+                message: response ? 'Thêm vào giỏ hàng thành công' : 'Có lỗi xảy ra!'
             })
-        }else{
-            const response = await User.findByIdAndUpdate(_id, {$push: {cart: {product: pid, quantity, color}}}, {new: true});
-            return res.status(200).json({
-                success: response ? true : false,
-                updatedCart: response ? response : 'Somthing went wrong!'
-            })
-        }
     }else{
-        const response = await User.findByIdAndUpdate(_id, {$push: {cart: {product: pid, quantity, color}}}, {new: true});
+        const response = await User.findByIdAndUpdate(_id, {$push: {cart: {product: pid, quantity, color, price, thumbnail, title}}}, {new: true});
         return res.status(200).json({
             success: response ? true : false,
-            updatedCart: response ? response : 'Somthing went wrong!'
+            message: response ? 'Thêm vào giỏ hàng thành công' : 'Có lỗi xảy ra!'
         })
     }
+})
+
+const removeProductInCart = asyncHandler(async (req, res) => { 
+    const {_id} = req.user;
+    const {pid, color} = req.params;
+    const user = await User.findById(_id).select('cart');
+    const alreadyProduct = user?.cart?.find(el => el.product.toString() === pid && el.color === color);
+    if(!alreadyProduct) return res.status(200).json({
+        success: true,
+        users: response ? response : 'Có lỗi xảy ra!'
+    })
+    const response = await User.findByIdAndUpdate(_id, {$pull: {cart: {product: pid, color}}}, {new: true});
+    return res.status(200).json({
+        success: response ? true : false,
+        message: response ? 'Xoá thành công' : 'Có lỗi xảy ra!'
+    }) 
 })
 
 module.exports = {
@@ -328,5 +351,6 @@ module.exports = {
     updateUserByadmin,
     updateUserAddress,
     updateCart,
-    finalRegister
+    finalRegister,
+    removeProductInCart
 }
